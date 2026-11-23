@@ -1,7 +1,7 @@
-import {Credentials, UrlObject} from "./configparser";
+import {UrlObject} from "./configparser";
 import async = require("async");
-import request = require("request");
-import {AuthOptions, RequestCallback, Response} from "request";
+import axios, {AxiosResponse} from "axios";
+import * as https from "https";
 import {AsyncFunction} from "async";
 
 const delayPattern = /^delay\(\d+\)*$/;
@@ -28,6 +28,9 @@ export class ExecutionStrategy {
 export type ErrorResponseObject = {
     error?: Error
 }
+
+export type Response = AxiosResponse & {statusCode: number};
+export type RequestCallback = (error?: Error, response?: Response, body?: string) => void;
 
 export type ResponseObject = {
     response: Response,
@@ -62,18 +65,6 @@ export function isHttpRedirectCode(statusCode: number) {
 export function httpRequest(urlObject: UrlObject, callback: RequestCallback, ...bodyReplacer: BodyReplacer[]) {
     let url = urlObject.url;
     let body = urlObject.body;
-    let auth: AuthOptions | undefined = undefined;
-
-    if (urlObject.auth && urlObject.auth.username && urlObject.auth.password) {
-        auth = {
-            username: urlObject.auth.username,
-            password: urlObject.auth.password
-        };
-
-        if (typeof urlObject.auth.sendImmediately !== "undefined")
-            auth.sendImmediately = urlObject.auth.sendImmediately;
-    }
-
     bodyReplacer.forEach(replacer => {
         url = url.replace(replacer.searchValue, replacer.replacer);
         if (body) {
@@ -81,20 +72,23 @@ export function httpRequest(urlObject: UrlObject, callback: RequestCallback, ...
         }
     });
 
-    request(
-        {
-            url: url,
-            body: body,
-            method: urlObject.method || "GET",
-            headers: urlObject.headers,
-            auth: auth,
-            strictSSL: urlObject.strictSSL,
-            timeout: urlObject.requestTimeout || 20000,
-        },
-        (error: any, response: Response, body: any) => {
-            callback(error, response, body);
-        }
-    )
+    axios.request({
+        url,
+        data: body,
+        method: urlObject.method || "GET",
+        headers: urlObject.headers,
+        auth: urlObject.auth && urlObject.auth.username && urlObject.auth.password ? {
+            username: urlObject.auth.username,
+            password: urlObject.auth.password
+        } : undefined,
+        httpsAgent: new https.Agent({rejectUnauthorized: urlObject.strictSSL}),
+        timeout: urlObject.requestTimeout || 20000,
+        responseType: "text",
+        validateStatus: () => true
+    }).then(result => {
+        const response = {...result, statusCode: result.status} as Response;
+        callback(undefined, response, result.data);
+    }).catch(error => callback(error));
 }
 
 export function multipleHttpRequests(urlObjectArray: UrlObject[], callback: (result: (ErrorResponseObject | ResponseObject)[]) => void) {
