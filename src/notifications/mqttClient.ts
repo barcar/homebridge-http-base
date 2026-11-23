@@ -2,7 +2,6 @@ import {Formats, Service} from "hap-nodejs";
 import {
     CloseCallback,
     MqttClient,
-    QoS,
     Packet,
     IConnackPacket,
     IClientPublishOptions,
@@ -10,7 +9,7 @@ import {
     IClientOptions
 } from "mqtt";
 import {utils} from "../index";
-import {MQTTPublishObject, MQTTSubscribeObject, MQTTSubscriptionObject} from "../configparser";
+import {MQTTPublishObject, MQTTSubscribeObject, MQTTSubscriptionObject, QoS} from "../configparser";
 import {EventEmitter} from "events";
 const mqttClient = require('mqtt');
 
