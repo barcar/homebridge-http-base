@@ -18,7 +18,7 @@
   "scripts": {
     "build": "npm run clean && tsc",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run build",
+    "prepare": "npm run build",
     "postpublish": "npm run clean",
     "test": "jest"
   },
