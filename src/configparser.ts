@@ -1,5 +1,7 @@
-import {IClientOptions, QoS} from "mqtt";
+import {IClientOptions} from "mqtt";
 import {MQTTSubscription} from "./notifications/mqttClient";
+
+export type QoS = 0 | 1 | 2;
 
 export type Credentials = {
     username?: string,

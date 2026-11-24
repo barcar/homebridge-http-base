@@ -2,7 +2,6 @@ import {Formats, Service} from "hap-nodejs";
 import {
     CloseCallback,
     MqttClient,
-    QoS,
     Packet,
     IConnackPacket,
     IClientPublishOptions,
@@ -10,7 +9,7 @@ import {
     IClientOptions
 } from "mqtt";
 import {utils} from "../index";
-import {MQTTPublishObject, MQTTSubscribeObject, MQTTSubscriptionObject} from "../configparser";
+import {MQTTPublishObject, MQTTSubscribeObject, MQTTSubscriptionObject, QoS} from "../configparser";
 import {EventEmitter} from "events";
 const mqttClient = require('mqtt');
 
@@ -225,12 +224,12 @@ export class MQTTClient extends EventEmitter {
 
                     if (this.debug)
                         this.log(`MQTT updating characteristic ${subscription.characteristic} to ${value}`);
-                    this.service.getCharacteristic(subscription.characteristic)!.updateValue(value);
+                    utils.getCharacteristic(this.service, subscription.characteristic)!.updateValue(value);
                 }), subscription.characteristic);
             } else {
                 if (this.debug)
                     this.log(`MQTT updating characteristic ${subscription.characteristic} to ${value}`);
-                this.service.getCharacteristic(subscription.characteristic)!.updateValue(value);
+                utils.getCharacteristic(this.service, subscription.characteristic)!.updateValue(value);
             }
         });
     }
