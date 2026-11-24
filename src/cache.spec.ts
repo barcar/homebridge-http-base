@@ -4,7 +4,13 @@ let cache: Cache;
 
 describe("Cache", function () {
     beforeEach(function () {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2024-01-01T00:00:00Z'));
         cache = new Cache(1);
+    });
+
+    afterEach(function () {
+        jest.useRealTimers();
     });
 
     it('should return shouldQuery=true on first call', function () {
@@ -15,12 +21,12 @@ describe("Cache", function () {
         expect(cache.shouldQuery()).toBe(false);
     });
 
-    it('should return shouldQuery=true after cache time expired', function (done) {
+    it('should return shouldQuery=true after cache time expired', function () {
         cache.queried();
-        setTimeout(() => {
-            expect(cache.shouldQuery()).toBe(true);
-            done();
-        }, 2);
+        jest.advanceTimersByTime(1);
+        expect(cache.shouldQuery()).toBe(false);
+        jest.advanceTimersByTime(1);
+        expect(cache.shouldQuery()).toBe(true);
     });
 
     it('should return shouldQuery=false when caching infinitely', function () {
