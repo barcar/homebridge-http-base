@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as nodeHttp from "http";
 import {UrlObject} from "./configparser";
-import {BodyReplacer, httpRequest, multipleHttpRequests} from "./http";
+import {BodyReplacer, httpRequest, multipleHttpRequests, setMultipleUrlExecutionStrategy} from "./http";
 
 describe("http client", () => {
     let server: nodeHttp.Server;
@@ -26,6 +26,9 @@ describe("http client", () => {
                     }
                 } else if (request.url === "/slow") {
                     setTimeout(() => response.end("too late"), 100);
+                } else if (request.url === "/redirect") {
+                    response.writeHead(302, {location: "/status"});
+                    response.end();
                 } else {
                     response.end(`${request.method}|${request.headers["x-test"] || ""}|${body}`);
                 }
@@ -137,6 +140,16 @@ describe("http client", () => {
         expect(result.body).toBeUndefined();
     });
 
+    it("follows GET redirects and exposes the final response body and headers", async () => {
+        const result = await sendRequest(new UrlObject(`${baseUrl}/redirect`));
+
+        expect(result.error).toBeNull();
+        expect(result.response!.statusCode).toBe(418);
+        expect(result.response!.headers).toBeDefined();
+        expect(result.response!.body).toBe("not json");
+        expect(result.body).toBe("not json");
+    });
+
     it("keeps multipleHttpRequests results for non-2xx responses", async () => {
         const results = await new Promise<any[]>(resolve => {
             multipleHttpRequests([
@@ -149,5 +162,22 @@ describe("http client", () => {
         expect(results[0].response.statusCode).toBe(418);
         expect(results[0].body).toBe("not json");
         expect(results[1].body).toBe("GET||");
+    });
+
+    it("executes repeated requests in order when using the series strategy", async () => {
+        const paths: string[] = [];
+        server.on("request", request => paths.push(request.url!));
+        const first = new UrlObject(`${baseUrl}/first`);
+        first.repeat = 2;
+        const second = new UrlObject(`${baseUrl}/second`);
+        setMultipleUrlExecutionStrategy("series");
+        try {
+            const results = await new Promise<any[]>(resolve => multipleHttpRequests([first, second], resolve));
+            expect(paths).toEqual(["/first", "/first", "/second"]);
+            expect(results).toHaveLength(3);
+            expect(results.map(result => result.response.statusCode)).toEqual([200, 200, 200]);
+        } finally {
+            setMultipleUrlExecutionStrategy("parallel");
+        }
     });
 });
