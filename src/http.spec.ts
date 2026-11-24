@@ -28,7 +28,9 @@ describe("http client", () => {
                     setTimeout(() => response.end("too late"), 100);
                 } else if (request.url === "/redirect") {
                     response.writeHead(302, {location: "/status"});
-                    response.end();
+                    response.end("redirect");
+                } else if (request.url === "/content-type") {
+                    response.end(request.headers["content-type"] || "none");
                 } else {
                     response.end(`${request.method}|${request.headers["x-test"] || ""}|${body}`);
                 }
@@ -148,6 +150,31 @@ describe("http client", () => {
         expect(result.response!.headers).toBeDefined();
         expect(result.response!.body).toBe("not json");
         expect(result.body).toBe("not json");
+    });
+
+    it.each(["POST", "PUT", "PATCH", "DELETE"])("does not follow %s redirects", async method => {
+        const urlObject = new UrlObject(`${baseUrl}/redirect`);
+        urlObject.method = method;
+        urlObject.body = "data";
+        const paths: string[] = [];
+        server.on("request", request => paths.push(request.url!));
+
+        const result = await sendRequest(urlObject);
+
+        expect(result.error).toBeNull();
+        expect(result.response!.statusCode).toBe(302);
+        expect(result.body).toBe("redirect");
+        expect(paths).toEqual(["/redirect"]);
+    });
+
+    it("does not add a content type to a POST body unless specified", async () => {
+        const urlObject = new UrlObject(`${baseUrl}/content-type`);
+        urlObject.method = "POST";
+        urlObject.body = "plain data";
+
+        expect((await sendRequest(urlObject)).body).toBe("none");
+        urlObject.headers = {"content-type": "text/plain"};
+        expect((await sendRequest(urlObject)).body).toBe("text/plain");
     });
 
     it("keeps multipleHttpRequests results for non-2xx responses", async () => {

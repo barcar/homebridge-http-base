@@ -1,6 +1,6 @@
 import {Credentials, UrlObject} from "./configparser";
 import async = require("async");
-import axios, {AxiosResponse} from "axios";
+import axios, {AxiosHeaders, AxiosResponse} from "axios";
 import {IncomingMessage} from "http";
 import {Agent as HttpsAgent} from "https";
 import {AsyncFunction} from "async";
@@ -89,16 +89,21 @@ export function httpRequest(urlObject: UrlObject, callback: RequestCallback, ...
         }
     });
 
+    const method = urlObject.method || "GET";
+    const headers = AxiosHeaders.from(urlObject.headers);
+    if (!headers.has("Content-Type"))
+        headers.set("Content-Type", false);
+
     const config = {
         url,
         data: body,
-        method: urlObject.method || "GET",
-        headers: urlObject.headers,
+        method,
+        headers,
         timeout: urlObject.requestTimeout || 20000,
         responseType: "text" as const,
         transformResponse: [(data: string) => data],
         validateStatus: () => true,
-        maxRedirects: 10,
+        maxRedirects: ["PATCH", "PUT", "POST", "DELETE"].includes(method.toUpperCase()) ? 0 : 10,
         httpsAgent: new HttpsAgent({rejectUnauthorized: urlObject.strictSSL !== false}),
     };
 

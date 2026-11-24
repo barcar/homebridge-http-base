@@ -3,7 +3,7 @@ import {once} from "events";
 import {Characteristic, Service} from "hap-nodejs";
 import {connectAsync, MqttClient} from "mqtt";
 import {join} from "path";
-import {MQTTPublishObject, MQTTSubscribeObject} from "../configparser";
+import {MQTTPublishObject, MQTTSubscribeObject, parseMQTTOptions} from "../configparser";
 import {MQTTClient} from "./mqttClient";
 
 describe("MQTT compatibility", () => {
@@ -57,6 +57,9 @@ describe("MQTT compatibility", () => {
         await subscribed;
 
         const characteristic = service.getCharacteristic(Characteristic.On);
+        jest.spyOn(service, "getCharacteristic").mockImplementation(() => {
+            throw new Error("This HomeKit service does not resolve characteristic names");
+        });
         const changed = once(characteristic, "change");
         await peer.publishAsync("switch/state", "ON", {qos: 1});
         const [change] = await changed;
@@ -115,5 +118,63 @@ describe("MQTT compatibility", () => {
         expect(packet.payload.toString()).toBe("value:ON");
         expect(packet.retain).toBe(true);
         expect(packet.qos).toBe(1);
+    });
+
+    it("parses configured subscriptions and extracts numeric characteristic values", async () => {
+        service = new Service.Lightbulb("Test light");
+        const characteristic = service.getCharacteristic(Characteristic.Brightness);
+        const options = parseMQTTOptions({
+            host: "127.0.0.1",
+            port,
+            subscriptions: [{topic: "light/state", characteristic: "Brightness", messagePattern: "level=(\\d+)"}],
+        });
+        client = new MQTTClient(service, options, log);
+        client.connect();
+        const subscribed = new Promise<void>(resolve => {
+            client.client!.on("packetreceive", packet => {
+                if (packet.cmd === "suback") resolve();
+            });
+        });
+        await subscribed;
+
+        const received = new Promise<void>(resolve => client.client!.once("message", () => resolve()));
+        await peer.publishAsync("light/state", "unmatched");
+        await received;
+        expect(log.error).toHaveBeenCalledWith(expect.stringContaining("couldn't extract value"));
+
+        const changed = once(characteristic, "change");
+        await peer.publishAsync("light/state", "level=43");
+        const [change] = await changed;
+        expect(change.newValue).toBe(43);
+    });
+
+    it("resubscribes after reconnecting to the broker", async () => {
+        const subscription = new MQTTSubscribeObject("switch/reconnect");
+        subscription.messagePattern = "^ON$";
+        client.subscribe(subscription, "On");
+        client.connect();
+        const firstSubscription = new Promise<void>(resolve => {
+            client.client!.once("packetreceive", packet => {
+                if (packet.cmd === "connack") {
+                    client.client!.once("packetreceive", () => resolve());
+                }
+            });
+        });
+        await firstSubscription;
+
+        const reconnected = once(client, "connected");
+        const resubscribed = new Promise<void>(resolve => {
+            client.client!.on("packetreceive", packet => {
+                if (packet.cmd === "suback") resolve();
+            });
+        });
+        client.client!.reconnect();
+        await reconnected;
+        await resubscribed;
+        const characteristic = service.getCharacteristic(Characteristic.On);
+        const changed = once(characteristic, "change");
+        await peer.publishAsync("switch/reconnect", "ON");
+        const [change] = await changed;
+        expect(change.newValue).toBe(true);
     });
 });

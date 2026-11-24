@@ -224,12 +224,12 @@ export class MQTTClient extends EventEmitter {
 
                     if (this.debug)
                         this.log(`MQTT updating characteristic ${subscription.characteristic} to ${value}`);
-                    this.service.getCharacteristic(subscription.characteristic)!.updateValue(value);
+                    utils.getCharacteristic(this.service, subscription.characteristic)!.updateValue(value);
                 }), subscription.characteristic);
             } else {
                 if (this.debug)
                     this.log(`MQTT updating characteristic ${subscription.characteristic} to ${value}`);
-                this.service.getCharacteristic(subscription.characteristic)!.updateValue(value);
+                utils.getCharacteristic(this.service, subscription.characteristic)!.updateValue(value);
             }
         });
     }
